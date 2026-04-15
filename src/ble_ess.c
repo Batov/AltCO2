@@ -20,6 +20,7 @@ static uint16_t co2_ppm;
 static int16_t temperature_cdeg;
 static uint16_t humidity_centi_pct;
 static uint32_t pressure_deci_pa;
+static char co2_str[32];
 
 /* --- Read callbacks --- */
 
@@ -55,6 +56,14 @@ static ssize_t read_pressure(struct bt_conn *conn,
                              &pressure_deci_pa, sizeof(pressure_deci_pa));
 }
 
+static ssize_t read_co2_str(struct bt_conn *conn,
+                            const struct bt_gatt_attr *attr,
+                            void *buf, uint16_t len, uint16_t offset)
+{
+    return bt_gatt_attr_read(conn, attr, buf, len, offset,
+                             co2_str, strlen(co2_str));
+}
+
 /* --- GATT сервис --- */
 
 BT_GATT_SERVICE_DEFINE(ess_svc,
@@ -86,6 +95,12 @@ BT_GATT_SERVICE_DEFINE(ess_svc,
                                               BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
                                               BT_GATT_PERM_READ,
                                               read_pressure, NULL, &pressure_deci_pa),
+                       BT_GATT_CCC(NULL, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
+                       /* CO2 строка для удобного чтения */
+                       BT_GATT_CHARACTERISTIC(BT_UUID_DECLARE_16(0x2901),
+                                              BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
+                                              BT_GATT_PERM_READ,
+                                              read_co2_str, NULL, co2_str),
                        BT_GATT_CCC(NULL, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE), );
 
 /* --- Advertising --- */
@@ -171,4 +186,13 @@ void ble_ess_update_pressure(uint32_t press_deci_pa)
 {
     pressure_deci_pa = press_deci_pa;
     bt_gatt_notify(NULL, &ess_svc.attrs[10], &pressure_deci_pa, sizeof(pressure_deci_pa));
+}
+
+void ble_ess_update_co2_str(uint16_t co2_ppm, int16_t temp_cdeg)
+{
+    snprintf(co2_str, sizeof(co2_str), "CO2:%dppm T:%d.%02dC",
+             co2_ppm,
+             temp_cdeg / 100,
+             abs(temp_cdeg % 100));
+    bt_gatt_notify(NULL, &ess_svc.attrs[13], co2_str, strlen(co2_str));
 }
